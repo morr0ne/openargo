@@ -1,0 +1,71 @@
+name: ci
+
+on:
+  # push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Run tests and uploads coverage
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-java@v1
+        with:
+          java-version: '12.x'
+      - uses: subosito/flutter-action@v1
+        with:
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter test --coverage
+      - name: Upload code coverage
+        uses: codecov/codecov-action@v1
+        with:
+            file: ./coverage/lcov.info
+            flags: unittests
+            name: codecov-umbrella
+            fail_ci_if_error: false
+  build:
+    runs-on: ubuntu-latest
+    name: Build and create release
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-java@v1
+        with:
+          java-version: '12.x'
+      - uses: subosito/flutter-action@v1
+        with:
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter build apk --release --obfuscate --split-debug-info=symbols/
+      - run: flutter build apk --release --obfuscate --split-debug-info=symbols/ --split-per-abi
+      - run: flutter build appbundle --release --obfuscate --split-debug-info=symbols/
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: true
+          prerelease: false
+      - name: Upload apk
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build/app/outputs/apk/release/app-release.apk
+          asset_name: openargo.apk
+          asset_content_type: application/apk
+      - name: Upload appbundle
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build/app/outputs/bundle/release/app-release.aab
+          asset_name: openargo.aab
+          asset_content_type: application/apk
